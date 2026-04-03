@@ -1,4 +1,4 @@
-# Cron Panel
+# Linux Cron Panel
 
 Linux 定时任务 Web 管理界面。
 
@@ -16,7 +16,7 @@ Linux 定时任务 Web 管理界面。
 
 - **后端**: Python 标准库（http.server），零依赖
 - **前端**: React + Vite（构建后静态文件）
-- **端口**: 5000
+- **端口**: 5002
 
 ## 快速开始
 
@@ -38,7 +38,7 @@ cd ~/.openclaw/cron-panel
 # python3 backend/server.py
 ```
 
-服务启动后访问: http://localhost:5000
+服务启动后访问: http://localhost:5002
 
 ### 3. 作为 systemd 服务（可选）
 
@@ -53,8 +53,8 @@ systemctl --user enable --now cron-panel.service
 
 后端会自动扫描 `crontab -l` 中的任务，并提取元数据：
 
-- 任务 ID：从命令提取（如 `ikuai-l2tp-monitor.sh` → `ikuai-l2tp-monitor-sh`）
-- 名称：支持 `# name: 任务名称` 注释
+- 任务 ID：自动生成的 UUID（如 `task_d9ea3ed9ef4443c3`）
+- 名称：支持 `# panel:name: 任务名称` 注释
 - 日志文件：自动检测 `>> /path/to/log 2>&1`
 - 启用状态：自动检测 `#` 注释
 
@@ -62,13 +62,15 @@ systemctl --user enable --now cron-panel.service
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
+| GET | `/api/version` | 版本信息 |
 | GET | `/api/tasks` | 列出所有任务 |
 | GET | `/api/tasks/<id>` | 获取任务详情 |
 | GET | `/api/tasks/<id>/log` | 获取日志内容 |
 | POST | `/api/tasks/<id>/run` | 手动运行 |
 | POST | `/api/tasks/<id>/toggle` | 切换启用/禁用 |
-| POST | `/api/tasks/<id>` | 更新任务配置 |
-| GET | `/api/status` | 统计信息 |
+| PUT | `/api/tasks/<id>` | 更新任务配置 |
+| DELETE | `/api/tasks/<id>` | 删除任务 |
+| POST | `/api/report-run` | 运行结果回调 |
 
 ## 状态持久化
 
@@ -77,16 +79,16 @@ systemctl --user enable --now cron-panel.service
 ```json
 {
   "tasks": {
-    "ikuai-l2tp-monitor-sh": {
-      "id": "...",
-      "name": "...",
-      "cron_expr": "...",
-      "command": "...",
-      "log_file": "...",
+    "task_d9ea3ed9ef4443c3": {
+      "id": "task_d9ea3ed9ef4443c3",
+      "name": "任务名称",
+      "cron_expr": "*/10 * * * *",
+      "command": "/path/to/script.sh",
+      "log_file": "/tmp/script.log",
       "enabled": true,
-      "last_run": "2026-04-02 20:00:00",
+      "last_run": "2026-04-03 14:00:00",
       "last_status": "success",
-      "last_output_snippet": "...",
+      "last_exit_code": 0,
       "history": [...]
     }
   }
@@ -98,11 +100,10 @@ systemctl --user enable --now cron-panel.service
 - 修改任务配置会重写 crontab，建议先在 Linux crontab 中手动测试
 - 日志文件路径必须是绝对路径，且有读取权限
 - 手动运行的任务在后台线程执行，不会阻塞 Web 界面
-- 如果任务 ID 重复（命令相同），会合并状态
 
 ## 故障排查
 
-- **端口占用**: `lsof -i :5000` 查看，`kill <pid>` 结束进程
+- **端口占用**: `lsof -i :5002` 查看，`kill <pid>` 结束进程
 - **权限问题**: 确保可读取日志文件，可执行 crontab 命令
 - **构建失败**: 确保 Node.js >= 18, npm >= 8
 

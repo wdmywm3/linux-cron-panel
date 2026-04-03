@@ -1,5 +1,5 @@
 {
-  "name": "cron-panel-frontend",
+  "name": "linux-cron-panel-frontend",
   "version": "1.0.0",
   "private": true,
   "type": "module",

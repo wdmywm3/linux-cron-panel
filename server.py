@@ -15,7 +15,7 @@ from datetime import datetime
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 # 配置
-STATE_FILE = os.path.expanduser('~/.openclaw/cron-panel/state.json')
+STATE_FILE = os.path.expanduser('~/.openclaw/linux-cron-panel/state.json')
 WORKDIR = os.path.dirname(os.path.abspath(__file__))
 
 if __name__ == '__main__':

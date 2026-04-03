@@ -12,8 +12,8 @@ from datetime import datetime
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 # Configuration
-STATE_FILE = os.path.expanduser('~/.openclaw/cron-panel/state.json')
-FRONTEND_DIR = os.path.expanduser('~/.openclaw/cron-panel/frontend/dist')
+STATE_FILE = os.path.expanduser('~/.openclaw/linux-cron-panel/state.json')
+FRONTEND_DIR = os.path.expanduser('~/.openclaw/linux-cron-panel/frontend/dist')
 WORKDIR = os.path.dirname(os.path.abspath(__file__))
 UUID_TASK_PATTERN = re.compile(r'^task_[0-9a-f]{16}$')
 API_VERSION = "1.1.0"
