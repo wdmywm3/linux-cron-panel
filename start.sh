@@ -56,13 +56,35 @@ if port_in_use 5002; then
   exit 1
 fi
 
-echo "📦 Building frontend..."
-cd frontend
-if [ ! -d "node_modules" ]; then
-  npm install
+# 只在必要时构建前端
+FRONTEND_DIR="$PWD/frontend"
+DIST_DIR="$FRONTEND_DIR/dist"
+NEEDS_BUILD=false
+
+if [ ! -d "$DIST_DIR" ]; then
+  echo "📦 Frontend dist not found, building..."
+  NEEDS_BUILD=true
+elif [ ! -f "$DIST_DIR/index.html" ]; then
+  echo "📦 Frontend dist incomplete, rebuilding..."
+  NEEDS_BUILD=true
+else
+  # 检查源文件是否比 dist 新
+  FIND_CMD="find '$FRONTEND_DIR/src' -newer '$DIST_DIR/index.html' -type f 2>/dev/null | head -1"
+  if [ -n "$(eval "$FIND_CMD" 2>/dev/null)" ]; then
+    echo "📦 Frontend source changed, rebuilding..."
+    NEEDS_BUILD=true
+  fi
 fi
-npm run build
-cd ..
+
+if [ "$NEEDS_BUILD" = true ]; then
+  cd "$FRONTEND_DIR"
+  if [ ! -d "node_modules" ]; then
+    echo "📦 Installing frontend dependencies..."
+    npm install
+  fi
+  npm run build
+  cd "$PWD"
+fi
 
 echo "🚀 Starting backend server on port ${PORT}..."
 nohup python3 backend/server.py >"$LOG_FILE" 2>&1 &
