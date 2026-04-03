@@ -4,6 +4,8 @@ Linux 定时任务 Web 管理界面。
 
 ## 功能
 
+为了解决 OpenClaw 所有 cron 任务必须通过大模型执行而浪费 token 而诞生的面板，配合 skill 使用。
+
 - 查看所有 Linux cron 任务（解析 `crontab -l`）
 - 显示最后执行时间和状态
 - 手动运行任务
