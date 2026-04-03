@@ -31,3 +31,7 @@ build/
 
 # User-specific task wrappers (keep wrapper.sh template)
 cron-wrappers/task_*.sh
+
+# Frontend (auto-built by start.sh)
+frontend/node_modules/
+frontend/dist/

@@ -15,48 +15,27 @@ Linux 定时任务 Web 管理界面。
 ## 架构
 
 - **后端**: Python 标准库（http.server），零依赖
-- **前端**: React + Vite（构建后静态文件）
+- **前端**: React + Vite（自动构建）
 - **端口**: 5002
 
 ## 快速开始
 
-### 1. 安装并构建前端
-
-```bash
-cd ~/.openclaw/linux-cron-panel/frontend
-npm install        # 首次需要
-npm run build      # 构建输出到 dist/
-```
-
-### 2. 启动服务
-
 ```bash
 cd ~/.openclaw/linux-cron-panel
 ./start.sh
-# 或者手动:
-# (cd frontend && npm run build)
-# python3 backend/server.py
 ```
 
-服务启动后访问: http://localhost:5002
+访问 http://localhost:5002
 
-### 3. 作为 systemd 服务（可选）
+> 首次运行时会自动安装前端依赖并构建。
+
+## systemd 服务（可选）
 
 ```bash
-# 创建 user service
 mkdir -p ~/.config/systemd/user
 cp linux-cron-panel.service ~/.config/systemd/user/
-systemctl --user enable --now cron-panel.service
+systemctl --user enable --now linux-cron-panel.service
 ```
-
-## 任务自动识别
-
-后端会自动扫描 `crontab -l` 中的任务，并提取元数据：
-
-- 任务 ID：自动生成的 UUID（如 `task_d9ea3ed9ef4443c3`）
-- 名称：支持 `# panel:name: 任务名称` 注释
-- 日志文件：自动检测 `>> /path/to/log 2>&1`
-- 启用状态：自动检测 `#` 注释
 
 ## API 接口
 
@@ -72,69 +51,25 @@ systemctl --user enable --now cron-panel.service
 | DELETE | `/api/tasks/<id>` | 删除任务 |
 | POST | `/api/report-run` | 运行结果回调 |
 
-## 状态持久化
+## 任务自动识别
 
-任务状态和运行历史存储在 `~/.openclaw/linux-cron-panel/state.json`：
-
-```json
-{
-  "tasks": {
-    "task_d9ea3ed9ef4443c3": {
-      "id": "task_d9ea3ed9ef4443c3",
-      "name": "任务名称",
-      "cron_expr": "*/10 * * * *",
-      "command": "/path/to/script.sh",
-      "log_file": "/tmp/script.log",
-      "enabled": true,
-      "last_run": "2026-04-03 14:00:00",
-      "last_status": "success",
-      "last_exit_code": 0,
-      "history": [...]
-    }
-  }
-}
-```
+- 任务 ID：自动生成的 UUID（如 `task_d9ea3ed9ef4443c3`）
+- 名称：支持 `# panel:name: 任务名称` 注释
+- 日志文件：自动检测 `>> /path/to/log 2>&1`
+- 启用状态：自动检测 `#` 注释
 
 ## Wrapper 脚本
 
-为确保任务执行后能正确回调 Panel，建议使用 wrapper 脚本执行任务命令：
+为确保任务执行后能正确回调 Panel，建议使用 wrapper 脚本：
 
 ```bash
-# 创建 wrapper（保存到项目目录）
-~/.openclaw/linux-cron-panel/cron-wrappers/task_xxx.sh
-
-# wrapper 内容示例：
-#!/bin/bash
-TASK_ID="task_xxx"
-PANEL_URL="http://127.0.0.1:5002"
-LOG_FILE="/tmp/task_xxx.log"
-
-$@ >> "$LOG_FILE" 2>&1
-EXIT_CODE=$?
-
-STATUS="success"
-[ $EXIT_CODE -ne 0 ] && STATUS="failure"
-
-curl -sS -X POST "${PANEL_URL}/api/report-run" \
-  -H 'Content-Type: application/json' \
-  -d "{\"task_id\":\"${TASK_ID}\",\"status\":\"${STATUS}\",\"exit_code\":${EXIT_CODE}}" > /dev/null 2>&1
-
-exit $EXIT_CODE
+~/.openclaw/linux-cron-panel/cron-wrappers/wrapper.sh TASK_ID COMMAND [args...]
 ```
 
-## 注意事项
-
-- 修改任务配置会重写 crontab，建议先在 Linux crontab 中手动测试
-- 日志文件路径必须是绝对路径，且有读取权限
-- 手动运行的任务在后台线程执行，不会阻塞 Web 界面
-- 建议使用 wrapper 脚本执行任务，以便 Panel 能正确记录执行状态
+详见 [cron-wrappers/wrapper.sh](cron-wrappers/wrapper.sh)
 
 ## 故障排查
 
-- **端口占用**: `lsof -i :5002` 查看，`kill <pid>` 结束进程
-- **权限问题**: 确保可读取日志文件，可执行 crontab 命令
-- **构建失败**: 确保 Node.js >= 18, npm >= 8
-
----
-
-基于 Python 标准库 + React + Vite 构建。
+- **端口占用**: `lsof -i :5002`
+- **权限问题**: 确保可执行 crontab 命令
+- **构建失败**: 确保 Node.js >= 18
