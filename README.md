@@ -23,7 +23,7 @@ Linux 定时任务 Web 管理界面。
 ### 1. 安装并构建前端
 
 ```bash
-cd ~/.openclaw/cron-panel/frontend
+cd ~/.openclaw/linux-cron-panel/frontend
 npm install        # 首次需要
 npm run build      # 构建输出到 dist/
 ```
@@ -31,7 +31,7 @@ npm run build      # 构建输出到 dist/
 ### 2. 启动服务
 
 ```bash
-cd ~/.openclaw/cron-panel
+cd ~/.openclaw/linux-cron-panel
 ./start.sh
 # 或者手动:
 # (cd frontend && npm run build)
@@ -45,7 +45,7 @@ cd ~/.openclaw/cron-panel
 ```bash
 # 创建 user service
 mkdir -p ~/.config/systemd/user
-cp cron-panel.service ~/.config/systemd/user/
+cp linux-cron-panel.service ~/.config/systemd/user/
 systemctl --user enable --now cron-panel.service
 ```
 
@@ -74,7 +74,7 @@ systemctl --user enable --now cron-panel.service
 
 ## 状态持久化
 
-任务状态和运行历史存储在 `~/.openclaw/cron-panel/state.json`：
+任务状态和运行历史存储在 `~/.openclaw/linux-cron-panel/state.json`：
 
 ```json
 {
@@ -95,11 +95,39 @@ systemctl --user enable --now cron-panel.service
 }
 ```
 
+## Wrapper 脚本
+
+为确保任务执行后能正确回调 Panel，建议使用 wrapper 脚本执行任务命令：
+
+```bash
+# 创建 wrapper（保存到项目目录）
+~/.openclaw/linux-cron-panel/cron-wrappers/task_xxx.sh
+
+# wrapper 内容示例：
+#!/bin/bash
+TASK_ID="task_xxx"
+PANEL_URL="http://127.0.0.1:5002"
+LOG_FILE="/tmp/task_xxx.log"
+
+$@ >> "$LOG_FILE" 2>&1
+EXIT_CODE=$?
+
+STATUS="success"
+[ $EXIT_CODE -ne 0 ] && STATUS="failure"
+
+curl -sS -X POST "${PANEL_URL}/api/report-run" \
+  -H 'Content-Type: application/json' \
+  -d "{\"task_id\":\"${TASK_ID}\",\"status\":\"${STATUS}\",\"exit_code\":${EXIT_CODE}}" > /dev/null 2>&1
+
+exit $EXIT_CODE
+```
+
 ## 注意事项
 
 - 修改任务配置会重写 crontab，建议先在 Linux crontab 中手动测试
 - 日志文件路径必须是绝对路径，且有读取权限
 - 手动运行的任务在后台线程执行，不会阻塞 Web 界面
+- 建议使用 wrapper 脚本执行任务，以便 Panel 能正确记录执行状态
 
 ## 故障排查
 
