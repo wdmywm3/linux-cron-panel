@@ -106,6 +106,7 @@ function App() {
   const [selectedTask, setSelectedTask] = useState(null)
   const [editingTask, setEditingTask] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [tooltip, setTooltip] = useState({ visible: false, text: '', x: 0, y: 0 })
 
   const fetchTasks = useCallback(async () => {
@@ -124,6 +125,22 @@ function App() {
       setLoading(false)
     }
   }, [])
+
+  const unwrapWrapperCommand = (command = '') => {
+    const text = String(command || '').trim()
+    if (!text.includes('/cron-wrappers/wrapper.sh')) return text
+    const marker = ' bash -lc '
+    const idx = text.indexOf(marker)
+    if (idx === -1) return text
+    let raw = text.slice(idx + marker.length).trim()
+    if (
+      (raw.startsWith("'") && raw.endsWith("'")) ||
+      (raw.startsWith('"') && raw.endsWith('"'))
+    ) {
+      raw = raw.slice(1, -1)
+    }
+    return raw
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -158,10 +175,11 @@ function App() {
       id: task.id,
       name: displayName,
       cron_expr: task.cron_expr,
-      command: task.command,
+      command: unwrapWrapperCommand(task.command),
       log_file: task.log_file,
       enabled: task.enabled
     })
+    setShowDeleteConfirm(false)
     setShowModal(true)
   }
 
@@ -183,6 +201,20 @@ function App() {
       fetchTasks()
     } catch (e) {
       alert('保存失败: ' + e.message)
+    }
+  }
+
+  const deleteTaskFromModal = async () => {
+    if (!editingTask) return
+    try {
+      const res = await fetch(`/api/tasks/${editingTask.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete task')
+      setShowDeleteConfirm(false)
+      setShowModal(false)
+      setEditingTask(null)
+      fetchTasks()
+    } catch (e) {
+      alert('删除失败: ' + e.message)
     }
   }
 
@@ -286,7 +318,9 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map(task => (
+              {tasks.map(task => {
+                const displayCommand = unwrapWrapperCommand(task.command)
+                return (
                 <tr key={task.id} style={{ borderBottom: '1px solid #eee' }} className="task-row">
                   <td style={nameCellStyle} className="col-name" data-label="名称">
                     <div
@@ -311,11 +345,11 @@ function App() {
                     style={commandCellStyle}
                     className="col-command"
                     data-label="命令"
-                    onMouseEnter={(e) => showTooltip(task.command, e)}
+                    onMouseEnter={(e) => showTooltip(displayCommand, e)}
                     onMouseMove={moveTooltip}
                     onMouseLeave={hideTooltip}
                   >
-                    {task.command}
+                    {displayCommand}
                   </td>
                   <td style={lastRunCellStyle} className="col-last-run" data-label="最后执行">
                     <div className="last-run-content">
@@ -334,7 +368,8 @@ function App() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -361,9 +396,50 @@ function App() {
                 <input type="checkbox" style={{ marginRight: '8px' }} checked={editingTask.enabled} onChange={(e) => setEditingTask({...editingTask, enabled: e.target.checked})} /> 启用
               </label>
             </div>
-            <div style={{ padding: '16px 20px', borderTop: '1px solid #eee', textAlign: 'right' }}>
-              <button style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }} onClick={() => setShowModal(false)}>取消</button>
-              <button style={{ padding: '10px 20px', background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }} onClick={saveEdit}>保存</button>
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                style={{ padding: '10px 20px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                删除任务
+              </button>
+              <div>
+                <button style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }} onClick={() => setShowModal(false)}>取消</button>
+                <button style={{ padding: '10px 20px', background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }} onClick={saveEdit}>保存</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {showDeleteConfirm && editingTask && (
+        <div
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowDeleteConfirm(false)
+          }}
+        >
+          <div style={{ background: 'white', borderRadius: '8px', width: '420px', maxWidth: '90%', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', fontSize: '18px', fontWeight: 600 }}>
+              确认删除
+            </div>
+            <div style={{ padding: '20px', color: '#333', lineHeight: 1.6 }}>
+              确认删除任务「{editingTask.name || editingTask.id}」吗？此操作不可恢复。
+            </div>
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                style={{ padding: '10px 20px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                onClick={deleteTaskFromModal}
+              >
+                确认删除
+              </button>
             </div>
           </div>
         </div>

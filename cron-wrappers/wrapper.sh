@@ -11,10 +11,17 @@ if [ -z "$TASK_ID" ]; then
     exit 1
 fi
 
-LOG_FILE="/tmp/${TASK_ID}.log"
+if [ "$#" -eq 0 ]; then
+    echo "Usage: $0 <TASK_ID> <command> [args...]"
+    exit 1
+fi
+
+LOG_DIR="${HOME}/.openclaw/linux-cron-panel/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="${LOG_DIR}/${TASK_ID}.log"
 
 # Execute the actual command
-$@ >> "$LOG_FILE" 2>&1
+"$@" >> "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 
 # Report result to Panel

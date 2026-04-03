@@ -4,13 +4,13 @@ Linux 定时任务 Web 管理界面。
 
 ## 功能
 
-- 📋 查看所有 Linux cron 任务（解析 `crontab -l`）
-- 🕐 显示最后执行时间和状态
-- ▶️ 手动运行任务
-- ⏸️ 启用/禁用任务
-- ✏️ 编辑任务（cron 表达式、命令、日志文件、名称）
-- 📋 查看任务日志（最近 100 行）
-- 🎨 美观的现代界面（React + Vite）
+- 查看所有 Linux cron 任务（解析 `crontab -l`）
+- 显示最后执行时间和状态
+- 手动运行任务
+- 启用/禁用任务
+- 编辑任务（cron 表达式、命令、日志文件、名称）
+- 查看任务日志（最近 100 行）
+- 美观的现代界面（React + Vite）
 
 ## 架构
 
@@ -21,8 +21,12 @@ Linux 定时任务 Web 管理界面。
 ## 快速开始
 
 ```bash
+# 克隆仓库
+git clone https://github.com/wdmywm3/linux-cron-panel.git ~/.openclaw/linux-cron-panel
+
+# 进入目录并启动
 cd ~/.openclaw/linux-cron-panel
-./start.sh
+bash start.sh
 ```
 
 访问 http://localhost:5002
@@ -50,23 +54,6 @@ systemctl --user enable --now linux-cron-panel.service
 | PUT | `/api/tasks/<id>` | 更新任务配置 |
 | DELETE | `/api/tasks/<id>` | 删除任务 |
 | POST | `/api/report-run` | 运行结果回调 |
-
-## 任务自动识别
-
-- 任务 ID：自动生成的 UUID（如 `task_d9ea3ed9ef4443c3`）
-- 名称：支持 `# panel:name: 任务名称` 注释
-- 日志文件：自动检测 `>> /path/to/log 2>&1`
-- 启用状态：自动检测 `#` 注释
-
-## Wrapper 脚本
-
-为确保任务执行后能正确回调 Panel，建议使用 wrapper 脚本：
-
-```bash
-~/.openclaw/linux-cron-panel/cron-wrappers/wrapper.sh TASK_ID COMMAND [args...]
-```
-
-详见 [cron-wrappers/wrapper.sh](cron-wrappers/wrapper.sh)
 
 ## 故障排查
 

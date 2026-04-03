@@ -6,6 +6,7 @@ import json
 import subprocess
 import threading
 import re
+import shlex
 import urllib.parse
 import uuid
 from datetime import datetime
@@ -17,6 +18,8 @@ FRONTEND_DIR = os.path.expanduser('~/.openclaw/linux-cron-panel/frontend/dist')
 WORKDIR = os.path.dirname(os.path.abspath(__file__))
 UUID_TASK_PATTERN = re.compile(r'^task_[0-9a-f]{16}$')
 API_VERSION = "1.1.0"
+WRAPPER_PATH = os.path.expanduser('~/.openclaw/linux-cron-panel/cron-wrappers/wrapper.sh')
+LOG_DIR = os.path.expanduser('~/.openclaw/linux-cron-panel/logs')
 
 def is_uuid_task_id(task_id):
     return bool(task_id and UUID_TASK_PATTERN.match(task_id))
@@ -78,7 +81,7 @@ def default_task(id, raw_line, cron_expr, command, log_file=None, name=None):
         "raw_line": raw_line,
         "cron_expr": cron_expr,
         "command": command,
-        "log_file": log_file or f"/tmp/{id}.log",
+        "log_file": log_file or default_log_file(id),
         "enabled": not raw_line.strip().startswith('#'),
         "last_run": None,
         "last_status": None,
@@ -89,6 +92,10 @@ def default_task(id, raw_line, cron_expr, command, log_file=None, name=None):
 
 def generate_uuid_id():
     return f"task_{uuid.uuid4().hex[:16]}"
+
+def default_log_file(task_id):
+    safe_id = re.sub(r'[^a-zA-Z0-9_-]', '_', str(task_id or "task"))
+    return os.path.join(LOG_DIR, f"{safe_id}.log")
 
 def parse_crontab_line(line):
     raw_line = line.rstrip('\n')
@@ -141,11 +148,40 @@ def normalize_task_name(task, fallback_name):
 def compose_raw_line(task):
     name = str(task.get("name") or task["id"]).replace('|', '-').replace('\n', ' ').strip()
     command = strip_legacy_report_callback(str(task["command"]).strip())
-    if task.get("log_file") and not re.search(r'>>\s*\S+\s*2>&1', command):
+    if task.get("log_file") and not is_wrapper_command(command) and not re.search(r'>>\s*\S+\s*2>&1', command):
         command = f"{command} >> {task['log_file']} 2>&1"
     command = f"{command} # panel:id={task['id']}|name={name}"
     line = f"{task['cron_expr']} {command}"
     return line if task.get("enabled", True) else f"# {line}"
+
+def is_wrapper_command(command):
+    text = str(command or "").strip()
+    if not text:
+        return False
+    try:
+        tokens = shlex.split(text)
+    except Exception:
+        tokens = text.split()
+    if len(tokens) < 2:
+        return False
+    wrapper_bin = os.path.expanduser(tokens[0])
+    return wrapper_bin.endswith('/cron-wrappers/wrapper.sh')
+
+def wrap_command_if_needed(command, task_id):
+    raw = strip_legacy_report_callback(str(command or "").strip())
+    if not raw:
+        return raw, False
+    if is_wrapper_command(raw):
+        try:
+            tokens = shlex.split(raw)
+        except Exception:
+            tokens = raw.split()
+        if len(tokens) >= 2 and tokens[1] != task_id:
+            tokens[1] = task_id
+            return ' '.join(shlex.quote(t) for t in tokens), True
+        return raw, False
+    wrapped = f"{shlex.quote(WRAPPER_PATH)} {shlex.quote(task_id)} bash -lc {shlex.quote(raw)}"
+    return wrapped, True
 
 def write_crontab_lines(lines):
     input_str = '\n'.join(lines).strip('\n')
@@ -250,6 +286,14 @@ def sync_tasks_from_crontab():
             if parsed_line.get('name'):
                 task['name'] = parsed_line['name']
             normalize_task_name(task, infer_default_name(task.get("command")))
+            wrapped_command, wrapped_changed = wrap_command_if_needed(task.get("command"), task_id)
+            if wrapped_changed:
+                task["command"] = wrapped_command
+                changed = True
+            desired_log_file = default_log_file(task_id)
+            if task.get("log_file") != desired_log_file:
+                task["log_file"] = desired_log_file
+                changed = True
             canonical_line = compose_raw_line(task)
             if canonical_line.strip() != line.strip():
                 changed = True
@@ -284,12 +328,15 @@ def create_task(data):
         raw_line="",
         cron_expr=cron_expr,
         command=command,
-        log_file=(data.get("log_file") or f"/tmp/{task_id}.log").strip()
+        log_file=(data.get("log_file") or default_log_file(task_id)).strip()
     )
     task["enabled"] = bool(data.get("enabled", True))
     if "name" in data:
         task["name"] = str(data.get("name") or "").strip()
     normalize_task_name(task, infer_default_name(task.get("command")))
+    wrapped_command, _ = wrap_command_if_needed(task.get("command"), task_id)
+    task["command"] = wrapped_command
+    task["log_file"] = default_log_file(task_id)
     task["raw_line"] = compose_raw_line(task)
     error = upsert_task_in_crontab(task)
     if error:
@@ -319,6 +366,9 @@ def update_task(task_id, data):
     if "enabled" in data:
         task["enabled"] = bool(data.get("enabled"))
     normalize_task_name(task, infer_default_name(task.get("command")))
+    wrapped_command, _ = wrap_command_if_needed(task.get("command"), task_id)
+    task["command"] = wrapped_command
+    task["log_file"] = default_log_file(task_id)
     task["raw_line"] = compose_raw_line(task)
     error = upsert_task_in_crontab(task)
     if error:
@@ -334,9 +384,18 @@ def delete_task(task_id):
     tasks = state.get("tasks", {})
     if task_id not in tasks:
         return "Task not found"
+    task = tasks.get(task_id) or {}
+    log_file = task.get("log_file")
     error = remove_task_from_crontab(task_id)
     if error:
         return error
+    if log_file:
+        try:
+            if os.path.exists(log_file) and os.path.isfile(log_file):
+                os.remove(log_file)
+        except Exception:
+            # 日志删除失败不应影响任务删除主流程
+            pass
     tasks.pop(task_id, None)
     state["tasks"] = tasks
     save_state(state)
@@ -592,6 +651,7 @@ class handler(BaseHTTPRequestHandler):
 
 def run_server(port=5002):
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
     server = ThreadingHTTPServer(('0.0.0.0', port), handler)
     print(f"Linux Cron Panel API: http://localhost:{port}")
     server.serve_forever()
