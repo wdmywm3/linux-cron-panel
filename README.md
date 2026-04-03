@@ -21,6 +21,14 @@ Linux 定时任务 Web 管理界面。
 
 ## 快速开始
 
+复制以下指令给 OpenClaw：
+
+```
+帮我安装这个技能https://clawhub.ai/wdmywm3/linux-cron-panel，并按照技能要求配置相关项目。
+```
+
+## 手动安装
+
 ```bash
 # 克隆仓库
 git clone https://github.com/wdmywm3/linux-cron-panel.git ~/.openclaw/linux-cron-panel
@@ -34,12 +42,32 @@ bash start.sh
 
 > 首次运行时会自动安装前端依赖并构建。
 
-## systemd 服务（可选）
+## WSL2 特殊配置
 
+如果是 WSL2 Linux 安装，注意需要开启 WSL2 的 mirror 模式，然后在 Windows 入站规则里开启 5002 端口。
+
+### 开启 WSL2 Mirror 模式
+
+在 Windows 用户目录创建或编辑 `.wslconfig` 文件：
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+然后执行：
 ```bash
-mkdir -p ~/.config/systemd/user
-cp linux-cron-panel.service ~/.config/systemd/user/
-systemctl --user enable --now linux-cron-panel.service
+wsl --shutdown
+```
+
+重启 WSL2 后生效。
+
+### Windows 防火墙配置
+
+在 Windows PowerShell（管理员）中执行：
+
+```powershell
+New-NetFirewallRule -DisplayName "Linux Cron Panel" -Direction Inbound -LocalPort 5002 -Protocol TCP -Action Allow
 ```
 
 ## API 接口
